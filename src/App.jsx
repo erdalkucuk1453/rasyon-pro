@@ -30,7 +30,12 @@ import {
   LogOut,
   UserCheck,
   CloudUpload,
-  CloudCheck
+  CloudCheck,
+  User,
+  Building,
+  Mail,
+  Calendar,
+  Database
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -41,6 +46,7 @@ import { exportRationPdf } from './utils/pdfExport';
 import AuthModal from './components/AuthModal';
 
 export default function App() {
+  // Navigation Tabs: 'ration', 'feeds', 'paddock', 'ai', 'economics', 'profile'
   const [activeTab, setActiveTab] = useState('ration');
 
   // User Auth State
@@ -145,7 +151,6 @@ export default function App() {
       }
 
       if (data.feeds && data.feeds.length > 0) {
-        // Merge or replace feeds
         setFeedLibrary(data.feeds);
       }
       setSyncStatus('synced');
@@ -295,7 +300,7 @@ export default function App() {
       {/* Mobile Top App Header with Custom Bull Logo */}
       <header className="w-full max-w-md bg-emerald-950/90 text-white shadow-xl sticky top-0 z-40 px-4 py-3 backdrop-blur-lg border-b border-emerald-800/40">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('profile')}>
             {/* Custom Generated Logo */}
             <div className="relative">
               <img 
@@ -314,8 +319,8 @@ export default function App() {
                   Besi
                 </span>
               </div>
-              <p className="text-[11px] text-emerald-200/80 font-medium">
-                {currentUser ? `${currentUser.farmName || currentUser.fullName}` : 'Büyükbaş Akıllı Besleme'}
+              <p className="text-[11px] text-emerald-200/80 font-medium truncate max-w-[140px]">
+                {currentUser ? (currentUser.farmName || currentUser.fullName || 'Profilim') : 'Büyükbaş Akıllı Besleme'}
               </p>
             </div>
           </div>
@@ -355,11 +360,15 @@ export default function App() {
 
             {currentUser && (
               <button
-                onClick={handleLogout}
-                className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/40 transition-colors"
-                title="Çıkış Yap"
+                onClick={() => setActiveTab('profile')}
+                className={`p-2 rounded-xl border transition-colors ${
+                  activeTab === 'profile'
+                    ? 'bg-emerald-600 text-white border-emerald-400'
+                    : 'bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border-emerald-700/50'
+                }`}
+                title="Kullanıcı Bilgileri"
               >
-                <LogOut className="w-4 h-4" />
+                <User className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -986,6 +995,107 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 6: KULLANICI PROFİLİ & VERİTABANI YÖNETİMİ */}
+        {activeTab === 'profile' && (
+          <div className="space-y-4 animate-fadeIn">
+            <div>
+              <h2 className="text-base font-bold text-white">Kullanıcı & Çiftlik Profili</h2>
+              <p className="text-xs text-slate-400">Giriş yapılan hesap ve veritabanı durumu</p>
+            </div>
+
+            {/* Profile Information Card */}
+            <div className="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex items-center gap-3.5 mb-5 pb-4 border-b border-slate-700/70">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black text-xl shadow-md border border-emerald-400/40">
+                  {currentUser?.fullName ? currentUser.fullName.charAt(0).toUpperCase() : 'Ç'}
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base leading-tight">
+                    {currentUser?.fullName || 'Besi İşletmesi Sahibi'}
+                  </h3>
+                  <p className="text-xs text-emerald-400 font-semibold mt-0.5">
+                    {currentUser?.farmName || 'Kayıtlı Çiftlik'}
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full mt-1.5 font-medium">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Doğrulanmış Besi Hesabı
+                  </span>
+                </div>
+              </div>
+
+              {/* User details list */}
+              <div className="space-y-3 text-xs">
+                <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 text-slate-400">
+                    <Mail className="w-4 h-4 text-emerald-400" />
+                    <span>E-Posta:</span>
+                  </div>
+                  <span className="font-bold text-white">{currentUser?.email || 'Giriş yapılmadı'}</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 text-slate-400">
+                    <Building className="w-4 h-4 text-emerald-400" />
+                    <span>İşletme Adı:</span>
+                  </div>
+                  <span className="font-bold text-white">{currentUser?.farmName || 'Belirtilmedi'}</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 text-slate-400">
+                    <Database className="w-4 h-4 text-emerald-400" />
+                    <span>Bulut Veritabanı:</span>
+                  </div>
+                  <span className="font-bold text-emerald-400 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    PostgreSQL Aktif
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 text-slate-400">
+                    <Beef className="w-4 h-4 text-emerald-400" />
+                    <span>Aktif Hayvan Sayısı:</span>
+                  </div>
+                  <span className="font-bold text-white">{animal.headCount} Baş Tosun</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5 pt-4 border-t border-slate-700/70 flex flex-col gap-2">
+                <button
+                  onClick={syncToCloud}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <RefreshCw className={`w-4 h-4 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                  <span>Rasyon ve Yem Verilerini Buluta Yedekle</span>
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-2.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/50 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Hesaptan Güvenli Çıkış Yap</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Farm Security & Backup Info */}
+            <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 text-xs space-y-2">
+              <h4 className="font-bold text-white flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Veri Güvenliği & Çiftlik Gizliliği</span>
+              </h4>
+              <p className="text-slate-400 leading-relaxed text-[11px]">
+                Çiftliğinize ait rasyon formülleri, yem maliyetleri ve hayvan performans kayıtları 256-bit SSL şifreleme ile doğrudan Vercel PostgreSQL bulut kümenizde saklanır. Verileriniz diğer işletmelerle veya 3. şahıslarla asla paylaşılmaz.
+              </p>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* Floating Bottom Navigation Bar (Mobile Native Look) */}
@@ -1048,6 +1158,18 @@ export default function App() {
         >
           <Coins className="w-5 h-5 mb-0.5" />
           <span className="text-[10px]">Maliyet</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex flex-col items-center py-1 px-2.5 rounded-xl transition-all ${
+            activeTab === 'profile' 
+              ? 'text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/40' 
+              : 'text-slate-400 hover:text-slate-200 font-medium'
+          }`}
+        >
+          <User className="w-5 h-5 mb-0.5" />
+          <span className="text-[10px]">Profil</span>
         </button>
       </nav>
 
