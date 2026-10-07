@@ -26,7 +26,11 @@ import {
   Percent,
   Calculator,
   Warehouse,
-  Activity
+  Activity,
+  LogOut,
+  UserCheck,
+  CloudUpload,
+  CloudCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -34,9 +38,19 @@ import { DEFAULT_FEEDS, BREED_OPTIONS, PERIOD_STAGES } from './data/feedsData';
 import { calculateRequirements, evaluateRation } from './utils/nutritionEngine';
 import { generateSmartRationOptimization, getAiConsultantAdvice } from './utils/aiConsultant';
 import { exportRationPdf } from './utils/pdfExport';
+import AuthModal from './components/AuthModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('ration');
+
+  // User Auth State
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('rasyon_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('rasyon_token') || '');
+  const [showAuthModal, setShowAuthModal] = useState(!currentUser);
+  const [syncStatus, setSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
 
   // Animal & Group State
   const [animal, setAnimal] = useState(() => {
@@ -86,6 +100,7 @@ export default function App() {
   const [feedSearch, setFeedSearch] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
 
+  // Sync to LocalStorage
   useEffect(() => {
     localStorage.setItem('rasyon_animal', JSON.stringify(animal));
   }, [animal]);
@@ -97,6 +112,83 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rasyon_amounts', JSON.stringify(rationAmounts));
   }, [rationAmounts]);
+
+  // Load from Postgres on login
+  useEffect(() => {
+    if (currentUser && authToken) {
+      loadUserDataFromCloud();
+    }
+  }, [authToken]);
+
+  const loadUserDataFromCloud = async () => {
+    try {
+      setSyncStatus('syncing');
+      const res = await fetch('/api/sync', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      if (data.ration) {
+        setAnimal(prev => ({
+          ...prev,
+          paddockName: data.ration.paddock_name || prev.paddockName,
+          headCount: Number(data.ration.head_count) || prev.headCount,
+          weight: Number(data.ration.weight) || prev.weight,
+          targetAdg: Number(data.ration.target_adg) || prev.targetAdg,
+          breedId: data.ration.breed_id || prev.breedId,
+          periodId: data.ration.period_id || prev.periodId,
+        }));
+        if (data.ration.amounts_json && Object.keys(data.ration.amounts_json).length > 0) {
+          setRationAmounts(data.ration.amounts_json);
+        }
+      }
+
+      if (data.feeds && data.feeds.length > 0) {
+        // Merge or replace feeds
+        setFeedLibrary(data.feeds);
+      }
+      setSyncStatus('synced');
+    } catch (e) {
+      console.warn("Bulut senkronizasyon okunamadı, yerel veriler kullanılıyor", e);
+      setSyncStatus('idle');
+    }
+  };
+
+  const syncToCloud = async () => {
+    if (!authToken) return;
+    try {
+      setSyncStatus('syncing');
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          animal,
+          rationAmounts,
+          feedLibrary
+        })
+      });
+      if (res.ok) {
+        setSyncStatus('synced');
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      } else {
+        setSyncStatus('error');
+      }
+    } catch (e) {
+      setSyncStatus('error');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('rasyon_token');
+    localStorage.removeItem('rasyon_user');
+    setCurrentUser(null);
+    setAuthToken('');
+    setShowAuthModal(true);
+  };
 
   const requirements = calculateRequirements(animal);
   
@@ -189,6 +281,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 pb-24 flex flex-col items-center">
+      {/* Auth Modal Trigger / Gate */}
+      {showAuthModal && (
+        <AuthModal 
+          onAuthSuccess={(user, token) => {
+            setCurrentUser(user);
+            setAuthToken(token);
+            setShowAuthModal(false);
+          }} 
+        />
+      )}
+
       {/* Mobile Top App Header with Custom Bull Logo */}
       <header className="w-full max-w-md bg-emerald-950/90 text-white shadow-xl sticky top-0 z-40 px-4 py-3 backdrop-blur-lg border-b border-emerald-800/40">
         <div className="flex items-center justify-between">
@@ -211,19 +314,37 @@ export default function App() {
                   Besi
                 </span>
               </div>
-              <p className="text-[11px] text-emerald-200/80 font-medium">Büyükbaş Akıllı Besleme</p>
+              <p className="text-[11px] text-emerald-200/80 font-medium">
+                {currentUser ? `${currentUser.farmName || currentUser.fullName}` : 'Büyükbaş Akıllı Besleme'}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Cloud Sync Button */}
+            <button
+              onClick={syncToCloud}
+              className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1 ${
+                syncStatus === 'synced'
+                  ? 'bg-emerald-600 border-emerald-400 text-white'
+                  : syncStatus === 'syncing'
+                  ? 'bg-amber-600/80 border-amber-500 text-white animate-pulse'
+                  : 'bg-emerald-900/80 border-emerald-700/50 text-emerald-200 hover:bg-emerald-800'
+              }`}
+              title="PostgreSQL Veritabanına Kaydet"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+            </button>
+
             <button
               onClick={handleSmartOptimize}
               disabled={isAiThinking}
-              className="flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-3 py-1.5 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-70"
+              className="flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-2.5 py-2 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-70"
             >
               <Sparkles className={`w-3.5 h-3.5 ${isAiThinking ? 'animate-spin' : ''}`} />
-              <span>{isAiThinking ? '...' : 'Oto Rasyon'}</span>
+              <span>{isAiThinking ? '...' : 'Oto'}</span>
             </button>
+
             <button
               onClick={handleDownloadPdf}
               className="p-2 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/50 transition-colors"
@@ -231,6 +352,16 @@ export default function App() {
             >
               <Download className="w-4 h-4" />
             </button>
+
+            {currentUser && (
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/40 transition-colors"
+                title="Çıkış Yap"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
